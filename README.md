@@ -1,38 +1,17 @@
 NestJS Event-Driven Microservices
 
-A simple example of building event-driven microservices with NestJS.
+A simple example of building microservices with NestJS using event-based messaging.
 
-This project demonstrates how a client application can communicate with a NestJS microservice and use event-based messaging to process operations asynchronously.
+Overview
 
-Architecture
-                         HTTP
-                          │
-                          ▼
-                  ┌───────────────┐
-                  │    Client     │
-                  │    NestJS     │
-                  └───────┬───────┘
-                          │
-                          │ Request
-                          ▼
-                ┌─────────────────────┐
-                │    MicroService     │
-                │       NestJS        │
-                └──────────┬──────────┘
-                           │
-                           │ Event
-                           ▼
-                 ┌───────────────────┐
-                 │ Event Processing  │
-                 │ / Message Handler │
-                 └───────────────────┘
+This project contains two separate NestJS applications:
 
+Client — handles HTTP requests.
 
-The goal of this project is to demonstrate the basic concepts behind NestJS microservices and event-driven communication.
+MicroService — handles microservice communication and event-based messaging.
 
 Project Structure
 NestWithMicroservices/
-│
 ├── Client/
 │   ├── src/
 │   └── package.json
@@ -43,25 +22,84 @@ NestWithMicroservices/
 │
 └── README.md
 
+How It Works
+
+The Client application receives an HTTP request and communicates with the MicroService application.
+
+Client
+  |
+  | HTTP Request
+  v
+MicroService
+  |
+  | Event / Message
+  v
+Event Handler
+
+
+In simple terms:
+
+A request is sent to the Client.
+
+The Client communicates with the MicroService.
+
+The MicroService processes the request.
+
+Events/messages are used for communication between the services.
+
 Client
 
-The Client application is responsible for receiving HTTP requests and communicating with the microservice.
+The Client application exposes HTTP endpoints and communicates with the MicroService.
 
-Example endpoints:
-
-POST /create
-GET  /item/:id
-
-
-The client runs on:
+The Client runs on:
 
 http://localhost:3001
 
+Available Endpoints
+POST /create
+GET  /item/:id
+
 MicroService
 
-The MicroService application contains the microservice logic and demonstrates event-based communication using NestJS.
+The MicroService application contains the microservice-side logic.
 
-This separation allows the client and microservice to run as independent applications.
+It demonstrates communication using NestJS microservices and event-based messaging.
+
+The Client and MicroService are separate applications and can be started independently.
+
+Getting Started
+1. Clone the Repository
+git clone https://github.com/tahirakhter/NestWithMicroservices.git
+cd NestWithMicroservices
+
+2. Install Client Dependencies
+cd Client
+npm install
+
+3. Start the Client
+npm run start
+
+
+The Client will run on:
+
+http://localhost:3001
+
+4. Install MicroService Dependencies
+
+Open a new terminal:
+
+cd MicroService
+npm install
+
+5. Start the MicroService
+npm run start:local
+
+API Examples
+Create Item
+POST http://localhost:3001/create
+
+Get Item
+GET http://localhost:3001/item/1
 
 Technologies
 
@@ -77,97 +115,62 @@ Event-based messaging
 
 HTTP
 
-Getting Started
-1. Clone the repository
-git clone https://github.com/tahirakhter/NestWithMicroservices.git
-
-cd NestWithMicroservices
-
-2. Install Client dependencies
-cd Client
-npm install
-
-3. Start the Client
-npm run start
-
-
-The client will be available at:
-
-http://localhost:3001
-
-4. Install MicroService dependencies
-
-Open another terminal:
-
-cd MicroService
-npm install
-
-5. Start the MicroService
-npm run start:local
-
-API Examples
-Create Item
-POST http://localhost:3001/create
-
-Get Item
-GET http://localhost:3001/item/1
-
 What This Project Demonstrates
 
-This project is intended as a learning example for:
+This project demonstrates the basic concepts of:
 
-Creating NestJS microservices
+NestJS microservices
 
-Separating an application into independent services
+Communication between independent services
 
-Event-based communication
+Event-based messaging
 
 Client-to-microservice communication
 
-Understanding asynchronous messaging
+Asynchronous communication
 
-Structuring a basic microservices application
+Basic microservice architecture
 
-Why Event-Driven Microservices?
+Event-Based Communication
 
-In a traditional application, components often communicate directly:
-
-Service A → Service B
-
-
-With event-driven architecture, a service can publish an event instead:
+Traditional service communication can look like:
 
 Service A
-   │
-   │ publishes event
-   ▼
- Event Bus
-   │
-   ├──────────────► Service B
-   │
-   └──────────────► Service C
+    |
+    | Request
+    v
+Service B
 
 
-This can reduce direct coupling between services and makes it easier to add new consumers later.
+With event-based communication:
+
+Service A
+    |
+    | Publish Event
+    v
+Event / Message
+    |
+    +----------> Service B
+    |
+    +----------> Service C
+
+
+This allows services to communicate through events instead of being tightly coupled to each other.
 
 Learning Goals
 
-After working through this project, you should have a basic understanding of:
+After working with this project, you should understand:
 
 How NestJS microservices are structured.
 
 How a client communicates with a microservice.
 
-What event-based messaging means.
+How event-based messaging works.
 
-The difference between synchronous requests and asynchronous events.
+The difference between request/response and event-based communication.
 
-How independent services can be developed and run separately.
+How to run multiple NestJS applications locally.
 
 Status
 
-This repository is primarily a learning/demo project for understanding NestJS microservices and event-driven communication.
-
-License
-
-This project is available for learning and experimentation.
+This is a learning/demo project for understanding NestJS microservices and event-based communication.
