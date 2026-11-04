@@ -1,16 +1,78 @@
-version: '3.4'
-
 services:
-    rabbit:
-        image: rabbitmq:3-management
-        ports:
-            - 5672:5672
-            - 15672:15672
-    dev-db:
+    postgres:
         image: postgres:13
         environment:
-            POSTGRES_USER: dbuser
-            POSTGRES_PASSWORD: fx7E8xC3Rv
-            POSTGRES_DB: 'nestApp'
+            POSTGRES_USER: ${POSTGRES_USER:-dbuser}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fx7E8xC3Rv}
+            POSTGRES_DB: ${POSTGRES_DB:-nestApp}
         ports:
             - '5432:5432'
+        volumes:
+            - postgres-data:/var/lib/postgresql/data
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                      'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"',
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+    rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+            - '5672:5672'
+            - '15672:15672'
+        healthcheck:
+            test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+    migrate:
+        build:
+            context: ..
+            dockerfile: Dockerfile
+            target: migration
+        environment:
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dbuser}:${POSTGRES_PASSWORD:-fx7E8xC3Rv}@postgres:5432/${POSTGRES_DB:-nestApp}?schema=public
+        depends_on:
+            postgres:
+                condition: service_healthy
+        restart: 'no'
+
+    microservice:
+        build:
+            context: ..
+            dockerfile: Dockerfile
+            target: runtime
+        environment:
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dbuser}:${POSTGRES_PASSWORD:-fx7E8xC3Rv}@postgres:5432/${POSTGRES_DB:-nestApp}?schema=public
+            RABBITMQ_URL: amqp://rabbitmq:5672
+            ITEMS_QUEUE: ${ITEMS_QUEUE:-items_queue}
+        depends_on:
+            postgres:
+                condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
+            migrate:
+                condition: service_completed_successfully
+
+    rest-api:
+        build:
+            context: ../../RestAPI
+            dockerfile: Dockerfile
+        environment:
+            RABBITMQ_URL: amqp://rabbitmq:5672
+            ITEMS_QUEUE: ${ITEMS_QUEUE:-items_queue}
+        ports:
+            - '3001:3001'
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+            microservice:
+                condition: service_started
+
+volumes:
+    postgres-data:

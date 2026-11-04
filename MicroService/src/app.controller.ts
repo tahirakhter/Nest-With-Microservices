@@ -5,28 +5,29 @@ import { AppService } from './app.service';
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
+
   @Get()
   getHello(): string {
     return this.appService.getHello();
   }
 
   @MessagePattern({ role: 'item', cmd: 'create' })
-  createItem(itemDto) {
+  createItem(itemDto: unknown) {
     return this.appService.createItem(itemDto);
   }
 
   @MessagePattern({ role: 'item', cmd: 'get-by-id' })
-  getItemById(id: number) {
+  getItemById(id: number | string) {
     return this.appService.getItemById(id);
   }
 
   @EventPattern('item_created')
-  async handleItemCreatedEvent(itemDto: Record<string, unknown>) {
+  handleItemCreatedEvent(itemDto: unknown) {
     return this.appService.createItem(itemDto);
   }
 
   @EventPattern('get-item-by-id')
-  async handleGetItemEvent(id: Record<number, unknown>) {
+  handleGetItemEvent(id: number | string) {
     return this.appService.getItemById(id);
   }
 }
