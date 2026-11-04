@@ -10,8 +10,8 @@ import { AppService } from './app.service';
         name: 'ITEM_MICROSERVICE',
         transport: Transport.RMQ,
         options: {
-          urls: ['amqp://localhost:5672'],
-          queue: 'items_queue',
+          urls: [process.env.RABBITMQ_URL || 'amqp://localhost:5672'],
+          queue: process.env.ITEMS_QUEUE || 'items_queue',
           queueOptions: {
             durable: false,
           },

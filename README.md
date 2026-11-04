@@ -1,176 +1,158 @@
-NestJS Event-Driven Microservices
+# NestJS Event-Driven Microservices
 
-A simple example of building microservices with NestJS using event-based messaging.
+A learning project with two NestJS applications: `RestAPI`, an HTTP gateway, and `MicroService`, an RMQ worker. The microservice validates item requests and persists records in PostgreSQL with Prisma. RabbitMQ carries both request-response messages and one-way events.
 
-Overview
+## Project Structure
 
-This project contains two separate NestJS applications:
+- `RestAPI/`: HTTP API on port `3001`; sends request-response messages to RabbitMQ.
+- `MicroService/`: RabbitMQ handlers and Prisma-backed item operations.
+- `MicroService/docker/docker-compose.yml`: the complete local stack, including both apps, RabbitMQ, PostgreSQL, and the Prisma migration job.
 
-Client — handles HTTP requests.
+## Architecture
 
-MicroService — handles microservice communication and event-based messaging.
+```mermaid
+flowchart LR
+  Caller[HTTP caller] -->|HTTP :3001| API[RestAPI]
+  API -->|AMQP, items_queue| Broker[RabbitMQ]
+  Broker --> Worker[MicroService]
+  Worker -->|Prisma| Database[(PostgreSQL)]
+  Database --> Worker
+  Worker -. request response only .-> Broker
+  Broker -. request response only .-> API
+```
 
-Project Structure
-NestWithMicroservices/
-├── Client/
-│   ├── src/
-│   └── package.json
-│
-├── MicroService/
-│   ├── src/
-│   └── package.json
-│
-└── README.md
+`RestAPI` is the HTTP entry point. It connects to RabbitMQ using the queue name `items_queue`; inside Compose, containers reach each other by service name. The microservice is not exposed as a public HTTP API.
 
-How It Works
+## Request-Response Workflow
 
-The Client application receives an HTTP request and communicates with the MicroService application.
+Use this flow when the HTTP caller needs a result. The request patterns are `{ role: 'item', cmd: 'create' }` and `{ role: 'item', cmd: 'get-by-id' }`.
 
-Client
-  |
-  | HTTP Request
-  v
-MicroService
-  |
-  | Event / Message
-  v
-Event Handler
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Caller
+  participant API as RestAPI
+  participant RMQ as RabbitMQ
+  participant Worker as MicroService
+  participant DB as PostgreSQL
+  Caller->>API: POST /create or GET /item/:id
+  API->>RMQ: send request on items_queue
+  RMQ->>Worker: deliver request pattern
+  Worker->>Worker: validate input
+  Worker->>DB: create or find item with Prisma
+  DB-->>Worker: item record
+  Worker-->>RMQ: item record
+  RMQ-->>API: response
+  API-->>Caller: item JSON
+```
 
+Expected validation and not-found failures are returned as HTTP errors. If the microservice cannot be reached, `RestAPI` returns a service-unavailable error.
 
-In simple terms:
+## Event Workflow
 
-A request is sent to the Client.
+Use events for one-way notifications when the publisher does not need the database result. The supported patterns are `item_created` and `get-item-by-id`.
 
-The Client communicates with the MicroService.
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Caller
+  participant API as RestAPI
+  participant RMQ as RabbitMQ
+  participant Worker as MicroService
+  participant DB as PostgreSQL
+  Caller->>API: POST /events/create
+  API->>RMQ: emit item_created
+  RMQ-->>API: publish observable completes
+  API-->>Caller: event publication acknowledgment
+  RMQ-->>Worker: deliver item_created event
+  Worker->>DB: create item with Prisma
+  DB-->>Worker: created item
+  Note over Worker,Caller: Event result is not sent back to the HTTP caller
+```
 
-The MicroService processes the request.
+`GET /events/item/:id` similarly emits `get-item-by-id`. The microservice performs the lookup, but the result is not returned through the event channel. For a lookup result, use `GET /item/:id` instead.
 
-Events/messages are used for communication between the services.
+## Requirements
 
-Client
+- Docker Desktop or Docker Engine with the Compose plugin
 
-The Client application exposes HTTP endpoints and communicates with the MicroService.
+## Run with Docker Compose
 
-The Client runs on:
+From the repository root, build and start the complete stack:
 
-http://localhost:3001
+```powershell
+docker compose -f .\MicroService\docker\docker-compose.yml up --build
+```
 
-Available Endpoints
-POST /create
-GET  /item/:id
+Compose waits for PostgreSQL and RabbitMQ to become healthy, runs the Prisma migration, then starts `MicroService` and `RestAPI`. The API is available at `http://localhost:3001`.
 
-MicroService
+| Service | Host port | Purpose |
+| --- | ---: | --- |
+| RestAPI | `3001` | HTTP endpoints |
+| RabbitMQ | `5672` | AMQP messaging |
+| RabbitMQ management | `15672` | Broker management UI |
+| PostgreSQL | `5432` | Item database |
 
-The MicroService application contains the microservice-side logic.
+The database uses a named volume, so its data remains when containers stop. Stop the stack with:
 
-It demonstrates communication using NestJS microservices and event-based messaging.
+```powershell
+docker compose -f .\MicroService\docker\docker-compose.yml down
+```
 
-The Client and MicroService are separate applications and can be started independently.
+Compose defaults are for local development. Set `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `ITEMS_QUEUE` in the environment to override them.
 
-Getting Started
-1. Clone the Repository
-git clone https://github.com/tahirakhter/NestWithMicroservices.git
-cd NestWithMicroservices
+## HTTP API
 
-2. Install Client Dependencies
-cd Client
-npm install
+### `POST /create`
 
-3. Start the Client
-npm run start
+Create an item. The item must have a non-empty `name` string.
 
-
-The Client will run on:
-
-http://localhost:3001
-
-4. Install MicroService Dependencies
-
-Open a new terminal:
-
-cd MicroService
-npm install
-
-5. Start the MicroService
-npm run start:local
-
-API Examples
-Create Item
+```http
 POST http://localhost:3001/create
+Content-Type: application/json
+```
 
-Get Item
+```json
+{
+  "name": "Example item"
+}
+```
+
+Returns the created item after the microservice stores it, for example:
+
+```json
+{
+  "id": 1,
+  "name": "Example item"
+}
+```
+
+### `GET /item/:id`
+
+Fetch an item by its positive integer ID.
+
+```http
 GET http://localhost:3001/item/1
+```
 
-Technologies
+Returns the matching item record, for example:
 
-Node.js
+```json
+{
+  "id": 1,
+  "name": "Example item"
+}
+```
 
-TypeScript
+### Event examples
 
-NestJS
+- `POST /events/create` publishes an `item_created` event and returns an acknowledgment.
+- `GET /events/item/:id` publishes a `get-item-by-id` event and returns an acknowledgment. The microservice performs the lookup, but the result is not returned to the HTTP caller.
 
-NestJS Microservices
+### `GET /`
 
-Event-based messaging
+Returns `Hello World!` from the RestAPI application.
 
-HTTP
+## Technology
 
-What This Project Demonstrates
-
-This project demonstrates the basic concepts of:
-
-NestJS microservices
-
-Communication between independent services
-
-Event-based messaging
-
-Client-to-microservice communication
-
-Asynchronous communication
-
-Basic microservice architecture
-
-Event-Based Communication
-
-Traditional service communication can look like:
-
-Service A
-    |
-    | Request
-    v
-Service B
-
-
-With event-based communication:
-
-Service A
-    |
-    | Publish Event
-    v
-Event / Message
-    |
-    +----------> Service B
-    |
-    +----------> Service C
-
-
-This allows services to communicate through events instead of being tightly coupled to each other.
-
-Learning Goals
-
-After working with this project, you should understand:
-
-How NestJS microservices are structured.
-
-How a client communicates with a microservice.
-
-How event-based messaging works.
-
-The difference between request/response and event-based communication.
-
-How to run multiple NestJS applications locally.
-
-Status
-
-This is a learning/demo project for understanding NestJS microservices and event-based communication.
+NestJS, TypeScript, RabbitMQ, PostgreSQL, Prisma, and Docker Compose.
